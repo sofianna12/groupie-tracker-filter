@@ -1,0 +1,176 @@
+<div class="artists-list">
+  <h2>Artists</h2>
+
+  <div class="toolbar">
+    <button class="add-btn" (click)="toggleAddForm()">{{ showAddForm ? 'Cancel' : '+ Add Artist' }}</button>
+    
+    <label>
+      Search by name:
+      <input type="text" [(ngModel)]="searchQuery" (ngModelChange)="onSearchInput($event)" (keyup.enter)="onSearch()" placeholder="Search artists..." />
+    </label>
+    <button (click)="onSearch()">Search</button>
+    <button (click)="clearSearch()">Clear</button>
+
+    <label class="sort-group">
+      Sort:
+      <button (click)="setSort('name')">Name {{ sortField === 'name' ? (sortDir==='asc' ? '▲' : '▼') : '' }}</button>
+      <button (click)="setSort('creationDate')">Date {{ sortField === 'creationDate' ? (sortDir==='asc' ? '▲' : '▼') : '' }}</button>
+    </label>
+
+    <label>
+      Items per page:
+      <select #ps (change)="changePageSize(ps.value, filteredArtists.length)" [value]="pageSize">
+        <option *ngFor="let opt of pageSizeOptions" [value]="opt">{{ opt }}</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- Filter Panel -->
+  <div class="filter-toggle">
+    <button (click)="showFilters = !showFilters" [class.active]="filterActive">
+      {{ showFilters ? 'Hide Filters' : 'Filters' }}{{ filterActive ? ' (active)' : '' }}
+    </button>
+    <button *ngIf="filterActive" (click)="clearFilters()">Clear Filters</button>
+  </div>
+
+  <div *ngIf="showFilters" class="filter-panel">
+    <!-- Range slider filter: creation date -->
+    <fieldset class="range-fieldset">
+      <legend>Creation Date</legend>
+      <div class="range-row">
+        <span class="range-label">From</span>
+        <input type="range" [(ngModel)]="filters.creationDateFrom"
+               [min]="creationDateMin" [max]="creationDateMax" step="1"
+               (input)="onCreationFromChange()" />
+        <span class="range-value">{{ filters.creationDateFrom || creationDateMin }}</span>
+      </div>
+      <div class="range-row">
+        <span class="range-label">To</span>
+        <input type="range" [(ngModel)]="filters.creationDateTo"
+               [min]="creationDateMin" [max]="creationDateMax" step="1"
+               (input)="onCreationToChange()" />
+        <span class="range-value">{{ filters.creationDateTo || creationDateMax }}</span>
+      </div>
+    </fieldset>
+
+    <!-- Range filter: first album year -->
+    <fieldset>
+      <legend>First Album Year</legend>
+      <label>From: <input type="number" [(ngModel)]="filters.firstAlbumFrom" min="1900" max="2100" placeholder="e.g. 1965" /></label>
+      <label>To: <input type="number" [(ngModel)]="filters.firstAlbumTo" min="1900" max="2100" placeholder="e.g. 2010" /></label>
+    </fieldset>
+
+    <!-- Checkbox filter: number of members -->
+    <fieldset>
+      <legend>Number of Members</legend>
+      <label *ngFor="let n of availableMemberCounts" class="checkbox-label">
+        <input type="checkbox" [checked]="selectedMemberCounts.has(n)" (change)="toggleMemberCount(n)" />
+        {{ n }} member{{ n === 1 ? '' : 's' }}
+      </label>
+    </fieldset>
+
+    <!-- Checkbox filter: concert locations -->
+    <fieldset class="locations-fieldset">
+      <legend>Concert Locations</legend>
+      <div class="locations-scroll">
+        <label *ngFor="let loc of availableLocations" class="checkbox-label">
+          <input type="checkbox" [checked]="selectedLocations.has(loc)" (change)="toggleLocation(loc)" />
+          {{ loc }}
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="filter-actions">
+      <button class="submit-btn" (click)="applyFilters()">Apply Filters</button>
+      <button class="cancel-btn" (click)="clearFilters()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Add/Edit Form -->
+  <div *ngIf="showAddForm" class="artist-form">
+    <h3>{{ editingArtist ? 'Edit Artist' : 'Add New Artist' }}</h3>
+    <form #artistForm="ngForm" (ngSubmit)="artistForm.valid && submitArtist()">
+      <div class="form-group">
+        <label>Name: *</label>
+        <input type="text" [(ngModel)]="newArtist.name" name="name" required #nameInput="ngModel" />
+        <span class="error-msg" *ngIf="nameInput.invalid && nameInput.touched">Name is required</span>
+      </div>
+      <div class="form-group">
+        <label>Image URL: *</label>
+        <input type="text" [(ngModel)]="newArtist.image" name="image" required #imageInput="ngModel" />
+        <span class="error-msg" *ngIf="imageInput.invalid && imageInput.touched">Image URL is required</span>
+      </div>
+      <div class="form-group">
+        <label>Members (comma separated): *</label>
+        <input type="text" [(ngModel)]="newArtist.members" name="members" placeholder="John, Jane, Bob" required #membersInput="ngModel" />
+        <span class="error-msg" *ngIf="membersInput.invalid && membersInput.touched">At least one member is required</span>
+      </div>
+      <div class="form-group">
+        <label>First Album Date: *</label>
+        <input type="text" [(ngModel)]="newArtist.firstAlbum" name="firstAlbum" placeholder="DD-MM-YYYY" required #albumInput="ngModel" />
+        <span class="error-msg" *ngIf="albumInput.invalid && albumInput.touched">First album date is required</span>
+      </div>
+      <div class="form-group">
+        <label>Locations (comma separated):</label>
+        <input type="text" [(ngModel)]="newArtist.locations" name="locations" placeholder="New York, London, Paris" />
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="submit-btn" [disabled]="artistForm.invalid">{{ editingArtist ? 'Update' : 'Create' }}</button>
+        <button type="button" class="cancel-btn" (click)="toggleAddForm()">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <div *ngIf="loading">Loading artists…</div>
+  <div *ngIf="pollingForLoad" class="loading">Initial data loading on server… please wait.</div>
+  <div *ngIf="error" class="error">Error: {{ error }}</div>
+
+  <div *ngIf="!loading && !error">
+    <table>
+            <thead>
+                <tr>
+                    <th>Image</th>
+                    <th>Name</th>
+          <th>First Album</th>
+          <th>Actions</th>
+                 </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let a of (filteredArtists | slice: (currentPage - 1) * pageSize : currentPage * pageSize)">
+                    <td>
+                        <a [routerLink]="['/artists', a.id]">
+                            <img [src]="a.image" [alt]="a.name" width="80" (error)="onImgError($event)" />
+                        </a>
+                    </td>
+                    <td>
+                        {{ a.name }}
+                    </td>
+        <td>
+      {{ a.firstAlbum }}
+        </td>
+        <td class="actions">
+          <button class="edit-btn" (click)="editArtist(a)" title="Edit">✏️</button>
+          <button class="delete-btn" (click)="deleteArtist(a.id, a.name)" title="Delete">🗑️</button>
+        </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="pagination" *ngIf="filteredArtists && filteredArtists.length">
+          <button (click)="changePage(currentPage - 1, filteredArtists.length)" [disabled]="currentPage === 1">Previous</button>
+
+          <ng-container *ngFor="let p of pages(filteredArtists.length)">
+            <button
+              class="page-btn"
+              [class.active]="p === currentPage"
+              (click)="changePage(p, filteredArtists.length)">
+              {{ p }}
+            </button>
+          </ng-container>
+
+          <button (click)="changePage(currentPage + 1, filteredArtists.length)" [disabled]="currentPage === totalPages(filteredArtists.length)">Next</button>
+        </div>
+
+        <div *ngIf="!filteredArtists.length">No results found.</div>
+  </div>
+</div>

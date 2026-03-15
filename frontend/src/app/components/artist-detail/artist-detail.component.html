@@ -1,0 +1,60 @@
+<div *ngIf="artist$ | async as artist; else loading" class="artist-detail">
+  <div class="artist-card">
+    
+    <div class="artist-header">
+      <div class="artist-image">
+        <img [src]="artist.image" [alt]="artist.name" />
+      </div>
+      <div class="artist-title">
+        <div class="artist-type">Artist</div>
+        <h2>{{ artist.name }}</h2>
+      </div>
+    </div>
+
+    <div class="artist-content">
+      <div class="info-grid">
+        
+        <div class="info-section">
+          <div class="label">First Album</div>
+          <div class="value">{{ artist.firstAlbum }}</div>
+        </div>
+
+        <div class="info-section">
+          <div class="label">Founded</div>
+          <div class="value">{{ artist.creationDate }}</div>
+        </div>
+
+        <div class="info-section">
+          <div class="label">Members</div>
+          <ul>
+            <li *ngFor="let m of artist.members">{{ m }}</li>
+          </ul>
+        </div>
+
+        <div class="info-section" *ngIf="artist.datesLocations && (artist.datesLocations | keyvalue).length">
+          <div class="label">Concert Schedule</div>
+          <div class="concert-schedule">
+            <div class="concert-row" *ngFor="let entry of artist.datesLocations | keyvalue">
+              <div class="concert-location">{{ entry.key }}</div>
+              <div class="concert-dates">
+                <span class="date-badge" *ngFor="let d of entry.value">{{ d }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <button class="back-btn" routerLink="/artists">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Back to Artists
+      </button>
+    </div>
+  </div>
+</div>
+
+<ng-template #loading>
+  <div class="loading">Loading artist</div>
+</ng-template>
