@@ -1,171 +1,177 @@
-# Groupie Tracker (Go backend + Angular frontend)
+# Groupie Tracker Filters
 
-Short guide to run the project locally, how the pieces fit, and troubleshooting notes.
+A Go + Angular application that fetches artist data from an external API and lets users filter, search, sort and manage artists.
 
-## What it does
+---
 
-- Displays a list of artists (name, image, album, locations)
-- Search, sort, pagination
+## Features
+
+- Display artists with image, name, first album, members, locations
+- **Filters**
+  - Creation date — range slider
+  - First album year — range input
+  - Number of members — checkboxes
+  - Concert locations — checkboxes (hierarchical match: `washington, usa` matches `seattle, washington, usa`)
+- Search by name, sort, pagination
 - CRUD operations (Create, Read, Update, Delete)
-- Dark theme UI
+- Artist detail page
 
-Repo layout (relevant parts)
-- `cmd/` - Go server entrypoint (`cmd/main.go`). Runs HTTP server on `:8080`.
-- `internal/backend` - Backend handlers, services and API fetcher.
-- `internal/db` - In-memory store used by the server.
-- `internal/frontend` - Angular app (standalone components) used as the UI.
 
-## Production Mode (Single Port :8080)
+---
 
-The Go backend serves both the API and the Angular static files on port 8080.
+## How to Run
 
-### Steps:
+### Option 1 — `go run` (local, no Docker)
 
-1) Build the Angular frontend:
+**Store: in-memory — data is lost on restart.**
 
-```bash
-cd internal/frontend
-npm install
-npm run build
+```
+terminal 1                        terminal 2
+──────────────────────────────    ──────────────────────────
+go run ./cmd                      cd frontend
+                                  npm install
+                                  npm start
 ```
 
-2) Start the Go server:
+- Backend: http://localhost:8080
+- Frontend: http://localhost:4200 (proxies `/api/*` to `:8080`)
+
+> On first startup the server blocks until it preloads data from the external API.
+
+---
+
+### Option 2 — `go run` + PostgreSQL (local, persistent data)
+
+Start only the database via Docker, run the rest locally:
 
 ```bash
-cd groupie-tracker
-go run ./cmd
+# terminal 1 — database only
+docker-compose up postgres
+
+# terminal 2 — backend with postgres
+DB_URL="postgres://groupie:groupie@localhost:5432/groupie?sslmode=disable" go run ./cmd
+
+# terminal 3 — frontend
+cd frontend && npm start
+# open http://localhost:4200
 ```
 
-3) Open browser at http://localhost:8080
+**Store: PostgreSQL — data survives restarts.**
 
-The Go server will:
-- Serve API endpoints at `/api/*`
-- Serve Angular static files for all other routes
-- Handle Angular routing (SPA fallback to index.html)
+---
 
-## Development Mode (Two Ports)
-
-For faster development with hot-reload:
-
-Requirements
-- Go 1.25+ installed and available as `go` in PATH.
-- Node.js (recommended Node 18+) and npm. Angular CLI optional (we use `npx @angular/cli` when needed).
-
-1) Start the Go backend
+### Option 3 — Docker Compose (3 separate services)
 
 ```bash
-# from repository root
-cd /home/pc/zon01/go_files/groupie-tracker
-# start the server (binds to :8080)
-go run ./cmd
+docker-compose up --build
 ```
 
-- The server logs a startup message: " Server running on http://localhost:8080" when listening.
-- On first startup the server will preload external API data synchronously (blocks until data is loaded).
+**Store: PostgreSQL — data survives restarts.**
 
-2) Start the frontend (Angular dev server with proxy)
+| Service    | Role                              | Port (external) |
+|------------|-----------------------------------|-----------------|
+| `postgres` | PostgreSQL database               | none            |
+| `backend`  | Go API                            | none            |
+| `frontend` | nginx — serves UI, proxies `/api` | **8080**        |
 
-```bash
-cd frontend
-npm install
-npm run start
-```
-
-- This uses `ng serve --proxy-config proxy.conf.json`. The dev server runs on http://localhost:4200 by default.
-- The `proxy.conf.json` in `internal/frontend` proxies requests starting with `/api` to the Go backend at `http://localhost:8080`, so you can use relative URLs like `/api/artists` in the frontend code and avoid CORS issues during development.
-
-How the frontend talks to backend
-- The Angular service `internal/frontend/src/app/services/artist.service.ts` calls endpoints such as:
-	- `GET /api/artists` — list all artists
-	- `GET /api/artists/:id` — artist details
-	- `POST /api/search` — search by name (the backend uses an async search worker)
-- Use the dev server proxy when developing (`npm run start`) so `/api` requests are forwarded to the Go server.
-
-Useful commands
-- Build frontend for production and run on single port:
+Open: **http://localhost:8080**
 
 ```bash
-cd frontend
-npm run build
-cd groupie-tracker
-go run ./cmd
-# Open http://localhost:8080
-```
+# run in background
+docker-compose up --build -d
 
-## Docker Deployment
-
-The easiest way to run the application is using Docker.
-
-### Prerequisites
-- Docker installed
-- Docker Compose installed (optional but recommended)
-
-### Quick Start with Docker Compose
-
-```bash
-# Build and run
-docker-compose up -d
-
-# View logs
+# logs
 docker-compose logs -f
+docker-compose logs -f backend
 
-# Stop
+# stop (data kept)
 docker-compose down
+
+# stop + delete database
+docker-compose down -v
 ```
 
-The application will be available at http://localhost:8080
+---
 
-### Manual Docker Commands
+### Option 4 — Single Docker image (no PostgreSQL)
+
+Builds everything into one image. Uses in-memory store.
 
 ```bash
-# Build the image
+# build
 docker build -t groupie-tracker:latest .
 
-# Run the container
+# run
 docker run -d -p 8080:8080 --name groupie-tracker groupie-tracker:latest
 
-# View logs
+# open http://localhost:8080
+
+# logs
 docker logs -f groupie-tracker
 
-# Stop and remove
-docker stop groupie-tracker
-docker rm groupie-tracker
+# stop
+docker stop groupie-tracker && docker rm groupie-tracker
 ```
 
-### Using Makefile
+**Store: in-memory — data is lost on restart.**
+
+---
+
+## Comparison
+
+| Mode | Command | Store | Data persists | Ports |
+|---|---|---|---|---|
+| Local dev | `go run ./cmd` + `npm start` | in-memory | No | 8080 + 4200 |
+| Local + DB | `go run` + `docker-compose up postgres` | PostgreSQL | Yes | 8080 + 4200 |
+| Docker Compose | `docker-compose up --build` | PostgreSQL | Yes | 8080 |
+| Single image | `docker build` + `docker run` | in-memory | No | 8080 |
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/artists` | List all artists |
+| GET | `/api/artists/:id` | Get artist by ID |
+| POST | `/api/artists` | Create artist |
+| PUT | `/api/artists/:id` | Update artist |
+| DELETE | `/api/artists/:id` | Delete artist |
+| POST | `/api/artists/filter` | Filter artists |
+| POST | `/api/search` | Search by name (async) |
+| GET | `/api/loaded` | Check if API data is loaded |
+| GET | `/health` | Health check |
+
+---
+
+## Running Tests
 
 ```bash
-# Build Docker image
-make docker-build
-
-# Run with docker-compose
-make docker-run
-
-# View logs
-make docker-logs
-
-# Stop
-make docker-stop
-
-# Clean everything
-make docker-clean
+go test ./...
 ```
 
-### Docker Image Details
+---
 
-The Docker image uses multi-stage build:
-1. **Stage 1**: Builds Angular frontend (Node.js)
-2. **Stage 2**: Builds Go backend
-3. **Stage 3**: Creates minimal runtime image (Alpine Linux)
+## Project Structure
 
-Final image size: ~20-30 MB
-
-### Health Check
-
-The container includes a health check that pings `/health` endpoint every 30 seconds.
-
-Check container health:
-```bash
-docker ps
-# Look for "healthy" status
+```
+groupie-tracker-filters/
+├── cmd/main.go               # HTTP server entrypoint (:8080)
+├── backend/
+│   ├── api/                  # Fetches data from external API on startup
+│   ├── events/               # Async search worker (goroutines + channels)
+│   ├── handlers/             # HTTP handlers + middleware
+│   ├── models/               # Artist, FilterRequest structs
+│   └── services/             # Business logic layer
+├── db/
+│   ├── store.go              # Store interface
+│   ├── memory.go             # In-memory implementation (default)
+│   └── postgres.go           # PostgreSQL implementation (when DB_URL is set)
+├── frontend/                 # Angular 21 standalone app
+│   ├── nginx.conf            # nginx config (used in Docker)
+│   └── proxy.conf.json       # Dev proxy → backend :8080
+├── Dockerfile                # Single-image build (frontend + backend, in-memory)
+├── Dockerfile.backend        # Backend-only image (used by docker-compose)
+├── Dockerfile.frontend       # Frontend nginx image (used by docker-compose)
+└── docker-compose.yml        # 3 services: postgres, backend, frontend
 ```
